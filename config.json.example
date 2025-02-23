@@ -1,5 +1,16 @@
 {
     "ACCESS_TOKEN": "your_instagram_access_token",
-    "INSTAGRAM_BUSINESS_ID": "your_instagram_business_account_id",
-    "OPENAI_API_KEY": "your_openai_api_key"
+    "INSTAGRAM_BUSINESS_ID": "your_instagram_business_id",
+    "OPENAI_API_KEY": "your_openai_api_key",
+    "CLOUDINARY_CLOUD_NAME": "your_cloudinary_cloud_name",
+    "CLOUDINARY_API_KEY": "your_cloudinary_api_key",
+    "CLOUDINARY_API_SECRET": "your_cloudinary_api_secret",
+    "LOG_FILE": "post_log.txt",
+    "PUBLISHED_FOLDER": "/published",
+    "IMAGE_FOLDERS": {
+        "poetic": "/詩意",
+        "humor": "/幽默",
+        "inspirational": "/勵志",
+        "marketing": "/行銷"
+    } 
 }
