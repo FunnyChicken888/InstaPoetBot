@@ -9,10 +9,14 @@ import openai
 import cloudinary
 import cloudinary.uploader
 
+def get_root_dir():
+    # 取得目前磁碟機的根目錄
+    return os.path.abspath(os.sep)
 # 讀取設定檔
 def load_config():
     try:
-        with open("/root/config.json", "r", encoding="utf-8") as f:
+        print(get_root_dir()+"root/config.json")
+        with open(get_root_dir()+"root/config.json", "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
         print("❌ Error: config.json not found!")
@@ -26,9 +30,9 @@ config = load_config()
 # 讀取 API 設定
 ACCESS_TOKEN = config["ACCESS_TOKEN"]
 INSTAGRAM_BUSINESS_ID = config["INSTAGRAM_BUSINESS_ID"]
-LOG_FILE = config["LOG_FILE"]
-PUBLISHED_FOLDER = config["PUBLISHED_FOLDER"]
-IMAGE_FOLDERS = config["IMAGE_FOLDERS"]
+LOG_FILE =  get_root_dir()+config["LOG_FILE"]
+PUBLISHED_FOLDER =  get_root_dir()+config["PUBLISHED_FOLDER"]
+IMAGE_FOLDERS =  config["IMAGE_FOLDERS"]
 
 # Cloudinary 設定
 cloudinary.config( 
@@ -43,7 +47,7 @@ openai.api_key = config["OPENAI_API_KEY"]
 # ✅ 從 `config.json` 設定的資料夾隨機選取一張圖片
 def get_random_image():
     selected_category = random.choice(list(IMAGE_FOLDERS.keys()))
-    folder_path = IMAGE_FOLDERS[selected_category]  
+    folder_path = get_root_dir()+IMAGE_FOLDERS[selected_category]  
     images = [f for f in os.listdir(folder_path) if f.endswith((".jpg", ".png"))]
 
     if not images:
@@ -125,6 +129,7 @@ def main():
         wait_until_5pm()  # 等待到 17:00 再發文
         
         image_path, category = get_random_image()
+        image_path = os.path.normpath(image_path)
         if not image_path:
             log_message("❌ No images found for posting.")
             continue
@@ -149,7 +154,7 @@ def main():
 
         # 等待到明天 5 點
         log_message("🎉 發文完成，等待明天 17:00 再次發文...")
-        time.sleep(86400)  # 等待 24 小時再執行（避免重複發文）
+        time.sleep(43200)  # 等待 24 小時再執行（避免重複發文）
 
 if __name__ == "__main__":
     main()
