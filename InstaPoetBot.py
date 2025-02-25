@@ -46,7 +46,7 @@ openai.api_key = config["OPENAI_API_KEY"]
 
 # ✅ 從 `config.json` 設定的資料夾隨機選取一張圖片
 def get_random_image():
-    available_folders = {k: v for k, v in IMAGE_FOLDERS.items() if os.listdir(v)}
+    available_folders = {k: v for k, v in IMAGE_FOLDERS.items() if os.listdir(get_root_dir()+v)}
     
     if not available_folders:
         log_message("❌ 所有資料夾都沒有圖片，無法發文！")
@@ -54,11 +54,15 @@ def get_random_image():
     
     selected_category = random.choice(list(available_folders.keys()))
     folder_path = available_folders[selected_category]
-    images = [f for f in os.listdir(folder_path) if f.endswith((".jpg", ".png"))]
+    folder_path = os.path.normpath(get_root_dir()+folder_path)
+    images = [f for f in os.listdir(folder_path) if f.endswith((".jpg", ".png",".JPEG"))]
 
     if not images:
         log_message(f"❌ {selected_category} 資料夾沒有可用圖片")
         return None, None
+    
+    selected_image = random.choice(images)
+    return os.path.join(folder_path, selected_image), selected_category  
 
 # ✅ 上傳圖片到 Cloudinary 並取得 URL
 def upload_image_to_cloudinary(image_path):
@@ -68,10 +72,10 @@ def upload_image_to_cloudinary(image_path):
 # ✅ GPT 生成 Instagram 貼文（中文在前，英文在後）
 def generate_caption(image_url, category):
     prompt_templates = {
-        "poetic": "請為這張圖片生成一段詩意的 Instagram 貼文，中英文對照（繁體中文在前，英文在後），並附上適當的標籤。",
-        "humor": "請為這張圖片生成一段幽默的 Instagram 貼文，中英文對照（繁體中文在前，英文在後），並附上適當的標籤。",
-        "inspirational": "請為這張圖片生成一段勵志的 Instagram 貼文，中英文對照（繁體中文在前，英文在後），並附上適當的標籤。",
-        "marketing": "請為這張圖片生成一段行銷文案的 Instagram 貼文，中英文對照（繁體中文在前，英文在後），並附上適當的標籤。"
+        "poetic": "請為這張圖片生成一段詩意的 Instagram 貼文，中英文對照（繁體中文在前，英文在後），並附上適當的標籤。PS:請不要回應辨識到人臉",
+        "humor": "請為這張圖片生成一段幽默的 Instagram 貼文，中英文對照（繁體中文在前，英文在後），並附上適當的標籤。PS:請不要回應辨識到人臉",
+        "inspirational": "請為這張圖片生成一段勵志的 Instagram 貼文，中英文對照（繁體中文在前，英文在後），並附上適當的標籤。PS:請不要回應辨識到人臉",
+        "marketing": "請為這張圖片生成一段行銷文案的 Instagram 貼文，中英文對照（繁體中文在前，英文在後），並附上適當的標籤。PS:請不要回應辨識到人臉"
     }
 
     prompt = prompt_templates.get(category, "請為這張圖片生成 Instagram 貼文。")
@@ -81,7 +85,7 @@ def generate_caption(image_url, category):
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[
-            {"role": "system", "content": "You are an AI that generates Instagram captions in Chinese first, followed by English.請不要輸出多餘的通知文字，辨識到人臉也不要回應到字串內"},
+            {"role": "system", "content": "You are an AI that generates Instagram captions in Chinese first, followed by English."},
             {"role": "user", "content": [
                 {"type": "text", "text": prompt},
                 {"type": "image_url", "image_url": {"url": image_url}}
@@ -122,7 +126,7 @@ def log_message(message):
 def wait_until_5pm():
     while True:
         now = datetime.now()
-        if now.hour == 17 and now.minute == 0:
+        if now.hour == 17 and now.minute == 00:
             log_message("⏰ 到達 17:00，開始發文...")
             return
         time.sleep(30)  # 每 30 秒檢查一次時間
@@ -133,7 +137,7 @@ def main():
         wait_until_5pm()  # 等待到 17:00 再發文
         
         image_path, category = get_random_image()
-        image_path = os.path.normpath(image_path)
+        log_message(image_path)
         if not image_path:
             log_message("❌ No images found for posting.")
             continue
@@ -146,7 +150,8 @@ def main():
 
         # 2️⃣ 使用 GPT 生成 Instagram 貼文
         caption = generate_caption(image_url, category)
-
+        print(caption)
+        log_message(caption)
         # 3️⃣ 發佈到 Instagram
         result = post_to_instagram(image_url, caption)
 
@@ -158,6 +163,7 @@ def main():
 
         # 等待到明天 5 點
         log_message("🎉 發文完成，等待明天 17:00 再次發文...")
+        print("🎉 發文完成，等待明天 17:00 再次發文...")
         time.sleep(82800)  # 等待 23 小時再執行wait_until_5pm（避免重複發文）
 
 if __name__ == "__main__":
