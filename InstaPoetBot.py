@@ -46,15 +46,19 @@ openai.api_key = config["OPENAI_API_KEY"]
 
 # ✅ 從 `config.json` 設定的資料夾隨機選取一張圖片
 def get_random_image():
-    selected_category = random.choice(list(IMAGE_FOLDERS.keys()))
-    folder_path = get_root_dir()+IMAGE_FOLDERS[selected_category]  
+    available_folders = {k: v for k, v in IMAGE_FOLDERS.items() if os.listdir(v)}
+    
+    if not available_folders:
+        log_message("❌ 所有資料夾都沒有圖片，無法發文！")
+        return None, None
+    
+    selected_category = random.choice(list(available_folders.keys()))
+    folder_path = available_folders[selected_category]
     images = [f for f in os.listdir(folder_path) if f.endswith((".jpg", ".png"))]
 
     if not images:
-        return None, None  
-
-    selected_image = random.choice(images)
-    return os.path.join(folder_path, selected_image), selected_category  
+        log_message(f"❌ {selected_category} 資料夾沒有可用圖片")
+        return None, None
 
 # ✅ 上傳圖片到 Cloudinary 並取得 URL
 def upload_image_to_cloudinary(image_path):
@@ -77,7 +81,7 @@ def generate_caption(image_url, category):
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[
-            {"role": "system", "content": "You are an AI that generates Instagram captions in Chinese first, followed by English."},
+            {"role": "system", "content": "You are an AI that generates Instagram captions in Chinese first, followed by English.請不要輸出多餘的通知文字，辨識到人臉也不要回應到字串內"},
             {"role": "user", "content": [
                 {"type": "text", "text": prompt},
                 {"type": "image_url", "image_url": {"url": image_url}}
@@ -154,7 +158,7 @@ def main():
 
         # 等待到明天 5 點
         log_message("🎉 發文完成，等待明天 17:00 再次發文...")
-        time.sleep(43200)  # 等待 24 小時再執行（避免重複發文）
+        time.sleep(82800)  # 等待 23 小時再執行wait_until_5pm（避免重複發文）
 
 if __name__ == "__main__":
     main()
