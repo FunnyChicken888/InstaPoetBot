@@ -1,0 +1,12 @@
+# 排除 Git 版本控制資料夾
+.git
+# 排除 Python 虛擬環境
+.venv
+# 排除 Pycache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+# 排除 IDE 設定檔
+.vscode/
+.idea/
