@@ -46,9 +46,6 @@ def get_random_image():
     folder_path = get_root_dir()+IMAGE_FOLDERS[selected_category]
     images = [f for f in os.listdir(folder_path) if f.endswith((".jpg", ".png"))]
 
-    if not images:
-        return None, None
-
     available_folders = {k: v for k, v in IMAGE_FOLDERS.items() if os.listdir(get_root_dir()+v)}
     
     if not available_folders:
@@ -100,7 +97,7 @@ def generate_caption(image_url, category, metadata):
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[
-            {"role": "system", "content": "You are an AI that generates Instagram captions in Chinese first, followed by English."},
+            {"role": "system", "content": "Instagram 貼文，中英文對照（繁體中文在前，英文在後），並附上適當的標籤。PS:請不要回應辨識到人臉"},
             {"role": "user", "content": [
                 {"type": "text", "text": prompt},
                 {"type": "image_url", "image_url": {"url": image_url}}
@@ -162,8 +159,6 @@ def main():
 
         caption = generate_caption(image_url, category, metadata)
 
-        # 2️⃣ 使用 GPT 生成 Instagram 貼文
-        caption = generate_caption(image_url, category)
         print(caption)
         log_message(caption)
         # 3️⃣ 發佈到 Instagram
