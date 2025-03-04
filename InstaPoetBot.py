@@ -42,6 +42,7 @@ cloudinary.config(
 openai.api_key = config["OPENAI_API_KEY"]
 
 def get_random_image():
+<<<<<<< HEAD
     selected_category = random.choice(list(IMAGE_FOLDERS.keys()))
     folder_path = get_root_dir()+IMAGE_FOLDERS[selected_category]
     images = [f for f in os.listdir(folder_path) if f.endswith((".jpg", ".png"))]
@@ -49,6 +50,23 @@ def get_random_image():
     if not images:
         return None, None
 
+=======
+    available_folders = {k: v for k, v in IMAGE_FOLDERS.items() if os.listdir(get_root_dir()+v)}
+    
+    if not available_folders:
+        log_message("❌ 所有資料夾都沒有圖片，無法發文！")
+        return None, None
+    
+    selected_category = random.choice(list(available_folders.keys()))
+    folder_path = available_folders[selected_category]
+    folder_path = os.path.normpath(get_root_dir()+folder_path)
+    images = [f for f in os.listdir(folder_path) if f.endswith((".jpg", ".png",".JPEG"))]
+
+    if not images:
+        log_message(f"❌ {selected_category} 資料夾沒有可用圖片")
+        return None, None
+    
+>>>>>>> 2953a67b0d2b0bee833c7a28156811dcc3592141
     selected_image = random.choice(images)
     return os.path.join(folder_path, selected_image), selected_category
 
@@ -69,10 +87,10 @@ def upload_image_to_cloudinary(image_path):
 
 def generate_caption(image_url, category, metadata):
     prompt_templates = {
-        "poetic": "請為這張圖片生成一段詩意的 Instagram 貼文，中英文對照（繁體中文在前，英文在後），並附上適當的標籤。",
-        "humor": "請為這張圖片生成一段幽默的 Instagram 貼文，中英文對照（繁體中文在前，英文在後），並附上適當的標籤。",
-        "inspirational": "請為這張圖片生成一段勵志的 Instagram 貼文，中英文對照（繁體中文在前，英文在後），並附上適當的標籤。",
-        "marketing": "請為這張圖片生成一段行銷文案的 Instagram 貼文，中英文對照（繁體中文在前，英文在後），並附上適當的標籤。"
+        "poetic": "請為這張圖片生成一段詩意的 Instagram 貼文，中英文對照（繁體中文在前，英文在後），並附上適當的標籤。PS:請不要回應辨識到人臉",
+        "humor": "請為這張圖片生成一段幽默的 Instagram 貼文，中英文對照（繁體中文在前，英文在後），並附上適當的標籤。PS:請不要回應辨識到人臉",
+        "inspirational": "請為這張圖片生成一段勵志的 Instagram 貼文，中英文對照（繁體中文在前，英文在後），並附上適當的標籤。PS:請不要回應辨識到人臉",
+        "marketing": "請為這張圖片生成一段行銷文案的 Instagram 貼文，中英文對照（繁體中文在前，英文在後），並附上適當的標籤。PS:請不要回應辨識到人臉"
     }
 
     prompt = prompt_templates.get(category, "請為這張圖片生成 Instagram 貼文。")
@@ -145,8 +163,16 @@ def main():
             log_message("❌ 圖片上傳失敗")
             continue
 
+<<<<<<< HEAD
         caption = generate_caption(image_url, category, metadata)
 
+=======
+        # 2️⃣ 使用 GPT 生成 Instagram 貼文
+        caption = generate_caption(image_url, category)
+        print(caption)
+        log_message(caption)
+        # 3️⃣ 發佈到 Instagram
+>>>>>>> 2953a67b0d2b0bee833c7a28156811dcc3592141
         result = post_to_instagram(image_url, caption)
 
         if "id" in result:
