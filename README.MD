@@ -120,8 +120,8 @@ cat image/post_log.txt
 ---
 
 ## **👨‍💻 貢獻者**
-🛠 **開發者：Your Name**  
-📧 **聯絡方式：your.email@example.com**  
+🛠 **開發者：FunnyChicken**  
+📧 **聯絡方式：funnychicken888@gmail.com**  
 🌐 **GitHub Repo：[Your GitHub](https://github.com/yourusername/InstaPoetBot)**  
 
 ---
