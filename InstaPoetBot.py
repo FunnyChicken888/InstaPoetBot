@@ -182,7 +182,12 @@ def main():
             log_message(f"❌ Failed to post {image_path}: {result}")
 
         log_message("🎉 發文完成，等待明天 17:00 再次發文...")
+<<<<<<< HEAD
         time.sleep(43200)
+=======
+        print("🎉 發文完成，等待明天 17:00 再次發文...")
+        time.sleep(82800)  # 等待 23 小時再執行wait_until_5pm（避免重複發文）
+>>>>>>> 2953a67b0d2b0bee833c7a28156811dcc3592141
 
 if __name__ == "__main__":
     main()
