@@ -42,7 +42,6 @@ cloudinary.config(
 openai.api_key = config["OPENAI_API_KEY"]
 
 def get_random_image():
-<<<<<<< HEAD
     selected_category = random.choice(list(IMAGE_FOLDERS.keys()))
     folder_path = get_root_dir()+IMAGE_FOLDERS[selected_category]
     images = [f for f in os.listdir(folder_path) if f.endswith((".jpg", ".png"))]
@@ -50,7 +49,6 @@ def get_random_image():
     if not images:
         return None, None
 
-=======
     available_folders = {k: v for k, v in IMAGE_FOLDERS.items() if os.listdir(get_root_dir()+v)}
     
     if not available_folders:
@@ -66,7 +64,6 @@ def get_random_image():
         log_message(f"❌ {selected_category} 資料夾沒有可用圖片")
         return None, None
     
->>>>>>> 2953a67b0d2b0bee833c7a28156811dcc3592141
     selected_image = random.choice(images)
     return os.path.join(folder_path, selected_image), selected_category
 
@@ -163,16 +160,13 @@ def main():
             log_message("❌ 圖片上傳失敗")
             continue
 
-<<<<<<< HEAD
         caption = generate_caption(image_url, category, metadata)
 
-=======
         # 2️⃣ 使用 GPT 生成 Instagram 貼文
         caption = generate_caption(image_url, category)
         print(caption)
         log_message(caption)
         # 3️⃣ 發佈到 Instagram
->>>>>>> 2953a67b0d2b0bee833c7a28156811dcc3592141
         result = post_to_instagram(image_url, caption)
 
         if "id" in result:
@@ -181,13 +175,10 @@ def main():
         else:
             log_message(f"❌ Failed to post {image_path}: {result}")
 
-        log_message("🎉 發文完成，等待明天 17:00 再次發文...")
-<<<<<<< HEAD
+        
         time.sleep(43200)
-=======
         print("🎉 發文完成，等待明天 17:00 再次發文...")
-        time.sleep(82800)  # 等待 23 小時再執行wait_until_5pm（避免重複發文）
->>>>>>> 2953a67b0d2b0bee833c7a28156811dcc3592141
+   
 
 if __name__ == "__main__":
     main()
