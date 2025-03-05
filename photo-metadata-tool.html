@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>圖片 EXIF Metadata 工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+        }
+        .left-panel {
+            flex: 1;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .right-panel {
+            flex: 2;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .image-list {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        .image-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+        }
+        .image-item:hover {
+            background-color: #f0f0f0;
+        }
+        .preview-image {
+            max-width: 100%;
+            max-height: 300px;
+            margin: 20px 0;
+            display: none;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .status {
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        .status-set {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+        .status-unset {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+        #loading {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <h1>圖片 EXIF Metadata 工具</h1>
+    <div style="background-color: #e3f2fd; padding: 10px; margin-bottom: 20px; border-radius: 4px;">
+        <p>📝 使用說明：</p>
+        <ul>
+            <li>請確保後端服務器正在運行 (python app.py)</li>
+            <li>後端服務器地址：http://localhost:5000</li>
+            <li>使用 VS Code 的 Live Server 擴展來預覽此頁面</li>
+        </ul>
+    </div>
+    <div id="loading">處理中...</div>
+    <div class="container">
+        <div class="left-panel">
+            <h2>圖片列表</h2>
+            <button onclick="handleFolderClick()">選擇資料夾</button>
+            <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none" onchange="handleFolderSelect(event)">
+            <div class="image-list" id="imageList"></div>
+        </div>
+        <div class="right-panel">
+            <h2>編輯 Metadata</h2>
+            <button onclick="document.getElementById('fileInput').click()">選擇單一圖片</button>
+            <input type="file" id="fileInput" accept="image/jpeg,image/jpg" style="display: none" onchange="handleFileSelect(event)">
+            
+            <img id="previewImage" class="preview-image">
+            
+            <div class="form-group">
+                <label for="storeName">店家名稱:</label>
+                <input type="text" id="storeName">
+            </div>
+            
+            <div class="form-group">
+                <label for="description">描述:</label>
+                <input type="text" id="description">
+            </div>
+            
+            <div class="form-group">
+                <label for="location">地點:</label>
+                <input type="text" id="location">
+            </div>
+            
+            <button onclick="saveMetadata()">儲存 Metadata</button>
+        </div>
+    </div>
+
+    <script>
+        let currentFile = null;
+        let currentResults = []; // 保存當前列表的結果
+        let selectedResult = null; // 保存當前選中的圖片結果
+        let imageFiles = new Map(); // 儲存所有圖片文件的引用
+        const API_URL = 'http://localhost:5000/api';
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function handleFolderClick() {
+            const input = document.getElementById('folderInput');
+            input.value = ''; // 清空之前的選擇
+            input.click();
+        }
+
+        async function handleFolderSelect(event) {
+            const files = Array.from(event.target.files).filter(file => 
+                file.type === 'image/jpeg' || file.type === 'image/jpg'
+            );
+            
+            if (files.length === 0) {
+                alert('未選擇任何 JPEG 圖片');
+                return;
+            }
+
+            showLoading();
+            try {
+                const processedFiles = [];
+                
+                // 逐個處理檔案，避免並行請求可能導致的問題
+                for (const file of files) {
+                    try {
+                        // 儲存文件引用
+                        imageFiles.set(file.name, file);
+                        
+                        // 讀取檔案內容
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        
+                        const response = await fetch(`${API_URL}/upload`, {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        if (!response.ok) throw new Error('上傳失敗');
+                        
+                        const result = await response.json();
+                        processedFiles.push({
+                            filename: file.name,
+                            hasMetadata: !!result.metadata,
+                            metadata: result.metadata,
+                            originalFile: file
+                        });
+                    } catch (error) {
+                        console.error(`處理檔案 ${file.name} 時發生錯誤:`, error);
+                        processedFiles.push({
+                            filename: file.name,
+                            hasMetadata: false,
+                            metadata: null,
+                            originalFile: file
+                        });
+                    }
+                }
+                
+                // 更新圖片列表，保留現有結果
+                if (processedFiles.length > 0) {
+                    currentResults = [...currentResults, ...processedFiles];
+                    displayImageList(currentResults);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('處理檔案時發生錯誤');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function displayImageList(results) {
+            const imageList = document.getElementById('imageList');
+            imageList.innerHTML = '';
+            
+            results.forEach(result => {
+                const div = document.createElement('div');
+                div.className = 'image-item';
+                div.onclick = () => selectImage(result);
+                
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = result.filename;
+                
+                const statusSpan = document.createElement('span');
+                statusSpan.className = `status ${result.hasMetadata ? 'status-set' : 'status-unset'}`;
+                statusSpan.textContent = result.hasMetadata ? '✅ 已設定' : '❌ 未設定';
+                
+                div.appendChild(nameSpan);
+                div.appendChild(statusSpan);
+                imageList.appendChild(div);
+            });
+        }
+
+        async function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                await uploadAndSelectImage(file);
+            }
+        }
+
+        async function uploadAndSelectImage(file, existingResult = null) {
+            showLoading();
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const response = await fetch(`${API_URL}/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) throw new Error('上傳失敗');
+                
+                const result = await response.json();
+                currentFile = {
+                    filename: file.name,
+                    ...result
+                };
+                selectedResult = existingResult || {
+                    filename: file.name,
+                    hasMetadata: !!result.metadata,
+                    metadata: result.metadata,
+                    originalFile: file
+                };
+                
+                // 預覽圖片
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const previewImage = document.getElementById('previewImage');
+                    previewImage.src = e.target.result;
+                    previewImage.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+                
+                // 填入metadata
+                if (result.metadata) {
+                    document.getElementById('storeName').value = result.metadata.store_name || '';
+                    document.getElementById('description').value = result.metadata.description || '';
+                    document.getElementById('location').value = result.metadata.location || '';
+                } else {
+                    clearForm();
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('上傳圖片時發生錯誤');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function clearForm() {
+            document.getElementById('storeName').value = '';
+            document.getElementById('description').value = '';
+            document.getElementById('location').value = '';
+        }
+
+        async function saveMetadata() {
+            if (!currentFile) {
+                alert('請先選擇圖片！');
+                return;
+            }
+
+            const metadata = {
+                store_name: document.getElementById('storeName').value.trim(),
+                description: document.getElementById('description').value.trim(),
+                location: document.getElementById('location').value.trim()
+            };
+
+            showLoading();
+            try {
+                const response = await fetch(`${API_URL}/save`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        filename: currentFile.filename,
+                        metadata: metadata
+                    })
+                });
+                
+                if (!response.ok) throw new Error('儲存失敗');
+                
+                // 下載更新後的圖片
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = currentFile.filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                // 更新列表中的狀態
+                updateImageStatus(currentFile.filename, true);
+                
+                // 更新 currentFile 的 metadata
+                currentFile.metadata = metadata;
+                
+                alert('Metadata 已成功儲存！');
+            } catch (error) {
+                console.error('Error:', error);
+                alert('儲存 metadata 時發生錯誤');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function selectImage(result) {
+            const file = imageFiles.get(result.filename);
+            if (file) {
+                await uploadAndSelectImage(file, result);
+            }
+        }
+
+        function updateImageStatus(filename, hasMetadata) {
+            // 更新內存中的結果
+            const result = currentResults.find(r => r.filename === filename);
+            if (result) {
+                result.hasMetadata = hasMetadata;
+                result.metadata = {
+                    store_name: document.getElementById('storeName').value.trim(),
+                    description: document.getElementById('description').value.trim(),
+                    location: document.getElementById('location').value.trim()
+                };
+            }
+
+            // 更新 UI
+            const imageList = document.getElementById('imageList');
+            const items = imageList.getElementsByClassName('image-item');
+            
+            for (let item of items) {
+                const nameSpan = item.querySelector('span');
+                if (nameSpan.textContent === filename) {
+                    const statusSpan = item.querySelector('.status');
+                    statusSpan.className = `status ${hasMetadata ? 'status-set' : 'status-unset'}`;
+                    statusSpan.textContent = hasMetadata ? '✅ 已設定' : '❌ 未設定';
+                    break;
+                }
+            }
+        }
+    </script>
+</body>
+</html>
