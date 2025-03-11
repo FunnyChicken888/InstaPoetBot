@@ -2,53 +2,111 @@ import os
 import json
 import piexif
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageTk
 
-# GUI 應用程式
 class ExifEditorApp:
     def __init__(self, root):
         self.root = root
         self.root.title("圖片 EXIF JSON 編輯器")
-        self.root.geometry("600x650")  # 增加高度以適應圖片預覽
+        self.root.geometry("900x650")  # 加寬視窗以容納列表
         
         self.image_path = None
+        self.folder_path = None
+        self.images_info = []
         
-        # 按鈕：選擇圖片
-        tk.Button(root, text="選擇圖片", command=self.select_image).pack(pady=10)
+        # 左側面板 - 圖片列表
+        left_panel = ttk.Frame(root)
+        left_panel.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=5)
+        
+        # 按鈕：選擇資料夾
+        ttk.Button(left_panel, text="選擇資料夾", command=self.select_folder).pack(pady=5)
+        
+        # 圖片列表（Treeview）
+        self.tree = ttk.Treeview(left_panel, columns=("filename", "status"), show="headings", height=20)
+        self.tree.heading("filename", text="檔案名稱")
+        self.tree.heading("status", text="Metadata狀態")
+        self.tree.column("filename", width=150)
+        self.tree.column("status", width=100)
+        self.tree.pack(pady=5)
+        self.tree.bind("<<TreeviewSelect>>", self.on_select_image)
+        
+        # 右側面板 - 編輯區域
+        right_panel = ttk.Frame(root)
+        right_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # 按鈕：選擇單一圖片
+        ttk.Button(right_panel, text="選擇圖片", command=self.select_image).pack(pady=5)
         
         # 圖片預覽框架
-        self.image_label = tk.Label(root)
+        self.image_label = tk.Label(right_panel)
         self.image_label.pack()
         
         # 標籤與輸入框
-        tk.Label(root, text="店家名稱:").pack()
-        self.store_name_entry = tk.Entry(root, width=50)
+        ttk.Label(right_panel, text="店家名稱:").pack()
+        self.store_name_entry = ttk.Entry(right_panel, width=50)
         self.store_name_entry.pack()
         
-        tk.Label(root, text="描述:").pack()
-        self.description_entry = tk.Entry(root, width=50)
+        ttk.Label(right_panel, text="描述:").pack()
+        self.description_entry = ttk.Entry(right_panel, width=50)
         self.description_entry.pack()
         
-        tk.Label(root, text="地點:").pack()
-        self.location_entry = tk.Entry(root, width=50)
+        ttk.Label(right_panel, text="地點:").pack()
+        self.location_entry = ttk.Entry(right_panel, width=50)
         self.location_entry.pack()
         
-
-        
-        
         # 按鈕：寫入 & 讀取 EXIF
-        tk.Button(root, text="寫入 EXIF JSON", command=self.write_exif).pack(pady=5)
-        tk.Button(root, text="讀取 EXIF JSON", command=self.read_exif).pack(pady=5)
+        ttk.Button(right_panel, text="寫入 EXIF JSON", command=self.write_exif).pack(pady=5)
+        ttk.Button(right_panel, text="讀取 EXIF JSON", command=self.read_exif).pack(pady=5)
+
+    def select_folder(self):
+        """選擇資料夾並列出所有圖片"""
+        folder_path = filedialog.askdirectory()
+        if folder_path:
+            self.folder_path = folder_path
+            self.scan_folder()
+    
+    def scan_folder(self):
+        """掃描資料夾中的所有圖片並檢查metadata狀態"""
+        # 清空現有列表
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        
+        # 掃描資料夾
+        for filename in os.listdir(self.folder_path):
+            if filename.lower().endswith(('.jpg', '.jpeg')):
+                file_path = os.path.join(self.folder_path, filename)
+                has_metadata = self.check_metadata(file_path)
+                status = "✅ 已設定" if has_metadata else "❌ 未設定"
+                self.tree.insert("", tk.END, values=(filename, status))
+    
+    def check_metadata(self, image_path):
+        """檢查圖片是否有metadata"""
+        try:
+            img = Image.open(image_path)
+            exif_dict = piexif.load(img.info.get("exif", b""))
+            json_data = exif_dict["0th"].get(piexif.ImageIFD.ImageDescription, b"").decode("utf-8")
+            metadata = json.loads(json_data)
+            return bool(metadata.get("store_name") or metadata.get("description") or metadata.get("location"))
+        except:
+            return False
+    
+    def on_select_image(self, event):
+        """當在列表中選擇圖片時"""
+        selection = self.tree.selection()
+        if selection:
+            filename = self.tree.item(selection[0])["values"][0]
+            self.image_path = os.path.join(self.folder_path, filename)
+            self.show_image_preview()
+            self.read_exif()
     
     def select_image(self):
-        """選擇圖片檔案並預覽，並自動讀取 EXIF"""
+        """選擇單一圖片檔案並預覽"""
         file_path = filedialog.askopenfilename(filetypes=[("JPEG 圖片", "*.jpg;*.jpeg")])
         if file_path:
             self.image_path = file_path
             self.show_image_preview()
             self.read_exif()
-            # messagebox.showinfo("成功", f"已選擇圖片: {file_path}")
     
     def show_image_preview(self):
         """顯示圖片預覽"""
@@ -68,7 +126,6 @@ class ExifEditorApp:
             "store_name": self.store_name_entry.get().strip(),
             "description": self.description_entry.get().strip(),
             "location": self.location_entry.get().strip(),
-            
         }
         
         json_data = json.dumps(metadata, ensure_ascii=False)
@@ -78,10 +135,10 @@ class ExifEditorApp:
         
         img = Image.open(self.image_path)
         img.save(self.image_path, exif=exif_bytes)
-        # messagebox.showinfo("成功", "✅ Metadata 已寫入 EXIF！")
-    
-
-
+        
+        # 更新列表中的狀態
+        if self.folder_path:
+            self.scan_folder()
     
     def read_exif(self):
         """讀取 EXIF JSON"""
@@ -103,20 +160,14 @@ class ExifEditorApp:
             self.location_entry.delete(0, tk.END)
             self.location_entry.insert(0, metadata.get("location", ""))
 
-
-
         except Exception as e:
-            # messagebox.showwarning("警告", f"EXIF 讀取失敗或不存在: {e}")
-            self.clear_entries()  # 清空輸入框
+            self.clear_entries()
 
     def clear_entries(self):
         """清空輸入框"""
         self.store_name_entry.delete(0, tk.END)
         self.description_entry.delete(0, tk.END)
         self.location_entry.delete(0, tk.END)
-        self.tags_entry.delete(0, tk.END)
-       
-
 
 # 啟動 GUI 應用程式
 if __name__ == "__main__":

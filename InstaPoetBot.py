@@ -44,7 +44,7 @@ openai.api_key = config["OPENAI_API_KEY"]
 def get_random_image():
     selected_category = random.choice(list(IMAGE_FOLDERS.keys()))
     folder_path = get_root_dir()+IMAGE_FOLDERS[selected_category]
-    images = [f for f in os.listdir(folder_path) if f.endswith((".jpg", ".png"))]
+    images = [f for f in os.listdir(folder_path) if f.endswith((".jpg", ".png",".JPEG"))]
 
     available_folders = {k: v for k, v in IMAGE_FOLDERS.items() if os.listdir(get_root_dir()+v)}
     
@@ -143,36 +143,43 @@ def wait_until_5pm():
 def main():
     while True:
         wait_until_5pm()
-
+        
+        # 1️⃣ 選取圖片
         image_path, category = get_random_image()
         image_path = os.path.normpath(image_path)
         if not image_path:
             log_message("❌ No images found for posting.")
             continue
+        log_message(f"📸 選取的圖片: {image_path} (類別: {category})")
 
+        # 2️⃣ 讀取 Metadata
         metadata = get_exif_info(image_path)
+        log_message(f"📜 讀取到的 Metadata: {metadata}" if metadata else "⚠️ 該圖片沒有 Metadata")
 
+        # 3️⃣ 上傳圖片到 Cloudinary
         image_url = upload_image_to_cloudinary(image_path)
         if not image_url:
             log_message("❌ 圖片上傳失敗")
             continue
+        log_message(f"✅ 圖片已上傳至 Cloudinary: {image_url}")
 
+        # 4️⃣ 產生 GPT 貼文內容
         caption = generate_caption(image_url, category, metadata)
+        log_message(f"📝 GPT 生成的貼文內容:\n{caption}")
 
-        print(caption)
-        log_message(caption)
-        # 3️⃣ 發佈到 Instagram
+        # 5️⃣ 發佈到 Instagram
         result = post_to_instagram(image_url, caption)
 
         if "id" in result:
             shutil.move(image_path, os.path.join(PUBLISHED_FOLDER, os.path.basename(image_path)))
-            log_message(f"✅ Posted {image_path} successfully: {result['id']}")
+            log_message(f"✅ Instagram 發文成功！圖片已移動至已發佈資料夾: {result['id']}")
         else:
-            log_message(f"❌ Failed to post {image_path}: {result}")
+            log_message(f"❌ Instagram 發文失敗: {result}")
 
-        
+        # 6️⃣ 休眠至明天
         time.sleep(43200)
-        print("🎉 發文完成，等待明天 17:00 再次發文...")
+        log_message("🎉 發文完成，等待明天 17:00 再次發文...")
+
    
 
 if __name__ == "__main__":
