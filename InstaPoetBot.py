@@ -44,7 +44,7 @@ openai.api_key = config["OPENAI_API_KEY"]
 def get_random_image():
     selected_category = random.choice(list(IMAGE_FOLDERS.keys()))
     folder_path = get_root_dir()+IMAGE_FOLDERS[selected_category]
-    images = [f for f in os.listdir(folder_path) if f.endswith((".jpg", ".png",".JPEG"))]
+    images = [f for f in os.listdir(folder_path) if f.endswith((".jpg", ".png",".JPEG",".JPG"))]
 
     available_folders = {k: v for k, v in IMAGE_FOLDERS.items() if os.listdir(get_root_dir()+v)}
     
@@ -55,7 +55,7 @@ def get_random_image():
     selected_category = random.choice(list(available_folders.keys()))
     folder_path = available_folders[selected_category]
     folder_path = os.path.normpath(get_root_dir()+folder_path)
-    images = [f for f in os.listdir(folder_path) if f.endswith((".jpg", ".png",".JPEG"))]
+    images = [f for f in os.listdir(folder_path) if f.endswith((".jpg", ".png",".JPEG",".JPG"))]
 
     if not images:
         log_message(f"❌ {selected_category} 資料夾沒有可用圖片")
@@ -146,10 +146,11 @@ def main():
         
         # 1️⃣ 選取圖片
         image_path, category = get_random_image()
-        image_path = os.path.normpath(image_path)
-        if not image_path:
+        if image_path == None:
             log_message("❌ No images found for posting.")
             continue
+        image_path = os.path.normpath(image_path)
+   
         log_message(f"📸 選取的圖片: {image_path} (類別: {category})")
 
         # 2️⃣ 讀取 Metadata
