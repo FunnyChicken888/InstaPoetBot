@@ -189,13 +189,13 @@ def main():
                         
 
         # 5️⃣ 發佈到 Instagram
-        # result = post_to_instagram(image_url, caption)
+        result = post_to_instagram(image_url, caption)
 
-        # if "id" in result:
-        #     shutil.move(image_path, os.path.join(PUBLISHED_FOLDER, os.path.basename(image_path)))
-        #     log_message(f"✅ Instagram 發文成功！圖片已移動至已發佈資料夾: {result['id']}")
-        # else:
-        #     log_message(f"❌ Instagram 發文失敗: {result}")
+        if "id" in result:
+            shutil.move(image_path, os.path.join(PUBLISHED_FOLDER, os.path.basename(image_path)))
+            log_message(f"✅ Instagram 發文成功！圖片已移動至已發佈資料夾: {result['id']}")
+        else:
+            log_message(f"❌ Instagram 發文失敗: {result}")
 
         # 6️⃣ 休眠至明天
         time.sleep(43200)
