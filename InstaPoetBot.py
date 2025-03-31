@@ -42,26 +42,22 @@ cloudinary.config(
 openai.api_key = config["OPENAI_API_KEY"]
 
 def get_random_image():
-    selected_category = random.choice(list(IMAGE_FOLDERS.keys()))
-    folder_path = get_root_dir()+IMAGE_FOLDERS[selected_category]
-    images = [f for f in os.listdir(folder_path) if f.endswith((".jpg", ".png",".JPEG",".JPG"))]
+    available_folders = {}
 
-    available_folders = {k: v for k, v in IMAGE_FOLDERS.items() if os.listdir(get_root_dir()+v)}
-    
+    for category, relative_path in IMAGE_FOLDERS.items():
+        folder_path = os.path.normpath(get_root_dir() + relative_path)
+        images = [f for f in os.listdir(folder_path) if f.lower().endswith((".jpg", ".jpeg", ".png"))]
+        if images:
+            available_folders[category] = (folder_path, images)
+
     if not available_folders:
         log_message("❌ 所有資料夾都沒有圖片，無法發文！")
         return None, None
-    
-    selected_category = random.choice(list(available_folders.keys()))
-    folder_path = available_folders[selected_category]
-    folder_path = os.path.normpath(get_root_dir()+folder_path)
-    images = [f for f in os.listdir(folder_path) if f.endswith((".jpg", ".png",".JPEG",".JPG"))]
 
-    if not images:
-        log_message(f"❌ {selected_category} 資料夾沒有可用圖片")
-        return None, None
-    
+    selected_category = random.choice(list(available_folders.keys()))
+    folder_path, images = available_folders[selected_category]
     selected_image = random.choice(images)
+
     return os.path.join(folder_path, selected_image), selected_category
 
 def get_exif_info(image_path):
@@ -193,13 +189,13 @@ def main():
                         
 
         # 5️⃣ 發佈到 Instagram
-        result = post_to_instagram(image_url, caption)
+        # result = post_to_instagram(image_url, caption)
 
-        if "id" in result:
-            shutil.move(image_path, os.path.join(PUBLISHED_FOLDER, os.path.basename(image_path)))
-            log_message(f"✅ Instagram 發文成功！圖片已移動至已發佈資料夾: {result['id']}")
-        else:
-            log_message(f"❌ Instagram 發文失敗: {result}")
+        # if "id" in result:
+        #     shutil.move(image_path, os.path.join(PUBLISHED_FOLDER, os.path.basename(image_path)))
+        #     log_message(f"✅ Instagram 發文成功！圖片已移動至已發佈資料夾: {result['id']}")
+        # else:
+        #     log_message(f"❌ Instagram 發文失敗: {result}")
 
         # 6️⃣ 休眠至明天
         time.sleep(43200)
