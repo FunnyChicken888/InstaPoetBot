@@ -4,7 +4,7 @@ import random
 import shutil
 import requests
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import openai
 import cloudinary
 import cloudinary.uploader
@@ -132,17 +132,36 @@ def log_message(message):
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(f"{datetime.now()} - {message}\n")
 
-def wait_until_5pm():
+def wait_next_post(wait_days, post_time):
+    wait_days = max(wait_days, 1)  # 強制至少等一天
+    global config
+    now = datetime.now()
+    post_hour, post_minute = map(int, post_time.split(':'))
+    next_post_time = now + timedelta(days=wait_days)
+    next_post_time = next_post_time.replace(hour=post_hour, minute=post_minute, second=0, microsecond=0)
+    log_message(f'下一次發文時間設定為 {next_post_time}')
     while True:
+        config = load_config()
         now = datetime.now()
-        if now.hour == 17 and now.minute == 0:
-            log_message("⏰ 到達 17:00，開始發文...")
+        
+        if now >= next_post_time:
+            log_message(f"⏰ 到達 {next_post_time}，開始發文...")
+
             return
+        elif config["POST_NOW"] == "YES":
+
+            log_message("📢 POST_NOW is YES, returning immediately.")
+            config["POST_NOW"] = "NO"
+            with open(get_root_dir() + "root/config.json", "w", encoding="utf-8") as f:
+                json.dump(config, f, ensure_ascii=False, indent=4)
+            return
+
+        # print(f'wait_next_post wait 30 sec config["POST_NOW"] = {config["POST_NOW"]}')
         time.sleep(30)
 
 def main():
     while True:
-        wait_until_5pm()
+        wait_next_post(config["WAIT_DAYS"], config["POST_TIME"])
         
         # 1️⃣ 選取圖片
         image_path, category = get_random_image()
@@ -165,8 +184,13 @@ def main():
         log_message(f"✅ 圖片已上傳至 Cloudinary: {image_url}")
 
         # 4️⃣ 產生 GPT 貼文內容
-        caption = generate_caption(image_url, category, metadata)
-        log_message(f"📝 GPT 生成的貼文內容:\n{caption}")
+        try:
+            caption = generate_caption(image_url, category, metadata)
+            log_message(f"📝 GPT 生成的貼文內容:\n{caption}")
+        except Exception as e:
+            log_message(f"❌ GPT 生成貼文內容失敗: {e} 本日停更")
+            continue
+                        
 
         # 5️⃣ 發佈到 Instagram
         result = post_to_instagram(image_url, caption)

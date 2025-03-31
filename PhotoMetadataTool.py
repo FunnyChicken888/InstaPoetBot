@@ -4,6 +4,19 @@ import piexif
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageTk
+import pyheif
+
+def convert_heic_to_jpeg(heic_path):
+    heif_file = pyheif.read(heic_path)
+    image = Image.frombytes(
+        heif_file.mode, 
+        heif_file.size, 
+        heif_file.data,
+        "raw",
+        heif_file.mode,
+        heif_file.stride,
+    )
+    return image
 
 class ExifEditorApp:
     def __init__(self, root):
@@ -74,7 +87,7 @@ class ExifEditorApp:
         
         # 掃描資料夾
         for filename in os.listdir(self.folder_path):
-            if filename.lower().endswith(('.jpg', '.jpeg')):
+            if filename.lower().endswith(('.jpg', '.jpeg', '.heic', '.HEIC')):
                 file_path = os.path.join(self.folder_path, filename)
                 has_metadata = self.check_metadata(file_path)
                 status = "✅ 已設定" if has_metadata else "❌ 未設定"
@@ -102,7 +115,7 @@ class ExifEditorApp:
     
     def select_image(self):
         """選擇單一圖片檔案並預覽"""
-        file_path = filedialog.askopenfilename(filetypes=[("JPEG 圖片", "*.jpg;*.jpeg")])
+        file_path = filedialog.askopenfilename(filetypes=[("Image files", "*.jpg;*.jpeg;*.heic;*.HEIC")])
         if file_path:
             self.image_path = file_path
             self.show_image_preview()
@@ -110,7 +123,10 @@ class ExifEditorApp:
     
     def show_image_preview(self):
         """顯示圖片預覽"""
-        img = Image.open(self.image_path)
+        if self.image_path.lower().endswith('.heic'):
+            img = convert_heic_to_jpeg(self.image_path)
+        else:
+            img = Image.open(self.image_path)
         img.thumbnail((300, 300))  # 讓圖片維持比例縮放到適合大小
         img_tk = ImageTk.PhotoImage(img)
         self.image_label.config(image=img_tk)
@@ -133,8 +149,14 @@ class ExifEditorApp:
         exif_dict["0th"][piexif.ImageIFD.ImageDescription] = json_data.encode("utf-8")
         exif_bytes = piexif.dump(exif_dict)
         
-        img = Image.open(self.image_path)
-        img.save(self.image_path, exif=exif_bytes)
+        if self.image_path.lower().endswith('.heic'):
+            img = convert_heic_to_jpeg(self.image_path)
+            jpeg_path = self.image_path.rsplit('.', 1)[0] + '.jpg'
+            img.save(jpeg_path, exif=exif_bytes)
+            self.image_path = jpeg_path  # 更新圖片路徑
+        else:
+            img = Image.open(self.image_path)
+            img.save(self.image_path, exif=exif_bytes)
         
         # 更新列表中的狀態
         if self.folder_path:
@@ -146,7 +168,10 @@ class ExifEditorApp:
             return
 
         try:
-            img = Image.open(self.image_path)
+            if self.image_path.lower().endswith('.heic'):
+                img = convert_heic_to_jpeg(self.image_path)
+            else:
+                img = Image.open(self.image_path)
             exif_dict = piexif.load(img.info.get("exif", b""))
             json_data = exif_dict["0th"].get(piexif.ImageIFD.ImageDescription, b"").decode("utf-8")
             metadata = json.loads(json_data)
