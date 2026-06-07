@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Mac Mini 開機自動啟動設定 (launchd)
+
+  安裝步驟：
+  1. 複製到 ~/Library/LaunchAgents/
+     cp /git/InstaPoetBot/com.instapoetbot.plist ~/Library/LaunchAgents/
+  2. 載入服務（登入後自動啟動）：
+     launchctl load ~/Library/LaunchAgents/com.instapoetbot.plist
+  3. 停止服務：
+     launchctl unload ~/Library/LaunchAgents/com.instapoetbot.plist
+  4. 查看 log：
+     tail -f /tmp/instapoetbot.log
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.instapoetbot</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/python3</string>
+    <string>-m</string>
+    <string>uvicorn</string>
+    <string>web.main:app</string>
+    <string>--host</string>
+    <string>0.0.0.0</string>
+    <string>--port</string>
+    <string>8000</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/git/InstaPoetBot</string>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/instapoetbot.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/tmp/instapoetbot.err</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+</dict>
+</plist>

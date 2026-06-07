@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InstaPoetBot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+    .log-terminal {
+      font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+      font-size: 0.78rem;
+      line-height: 1.6;
+    }
+    .log-terminal::-webkit-scrollbar { width: 6px; }
+    .log-terminal::-webkit-scrollbar-track { background: #1a1a2e; }
+    .log-terminal::-webkit-scrollbar-thumb { background: #4f46e5; border-radius: 3px; }
+    .img-card:hover .img-overlay { opacity: 1; }
+    .img-overlay { transition: opacity 0.2s; }
+    input[type="text"], input[type="password"], input[type="number"], input[type="time"], textarea, select {
+      background: #1f2937;
+      border: 1px solid #374151;
+      color: #f9fafb;
+      border-radius: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      width: 100%;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus, textarea:focus, select:focus { border-color: #6366f1; }
+    textarea { resize: vertical; }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen" x-data="app()" x-init="init()" x-cloak>
+
+  <!-- Layout -->
+  <div class="flex h-screen overflow-hidden">
+
+    <!-- Sidebar -->
+    <aside class="w-56 bg-gray-900 border-r border-gray-800 flex flex-col shrink-0">
+      <!-- Logo -->
+      <div class="px-5 py-5 border-b border-gray-800">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">🤖</span>
+          <div>
+            <p class="font-bold text-white text-sm leading-tight">InstaPoetBot</p>
+            <p class="text-xs text-gray-500">自動發文系統</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Nav -->
+      <nav class="flex-1 px-3 py-4 space-y-1">
+        <template x-for="item in navItems" :key="item.id">
+          <button
+            @click="switchTab(item.id)"
+            :class="tab === item.id
+              ? 'bg-indigo-600 text-white'
+              : 'text-gray-400 hover:bg-gray-800 hover:text-white'"
+            class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all"
+          >
+            <span x-text="item.icon" class="text-base"></span>
+            <span x-text="item.label"></span>
+          </button>
+        </template>
+      </nav>
+
+      <!-- Scheduler status -->
+      <div class="px-4 py-4 border-t border-gray-800">
+        <div class="flex items-center gap-2">
+          <span :class="schedulerRunning ? 'bg-green-500' : 'bg-red-500'"
+                class="w-2 h-2 rounded-full"></span>
+          <span class="text-xs text-gray-400" x-text="schedulerRunning ? '排程器運行中' : '排程器已停止'"></span>
+        </div>
+        <p class="text-xs text-gray-600 mt-1">
+          下次發文：<span class="text-gray-400" x-text="nextRun || '—'"></span>
+        </p>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="flex-1 overflow-y-auto">
+
+      <!-- ══════════════ DASHBOARD ══════════════ -->
+      <div x-show="tab === 'dashboard'" class="p-6 space-y-6">
+        <div class="flex items-center justify-between">
+          <h1 class="text-xl font-bold text-white">Dashboard</h1>
+          <button
+            @click="triggerPostNow()"
+            :disabled="posting"
+            :class="posting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-indigo-500'"
+            class="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all"
+          >
+            <span x-text="posting ? '發文中...' : '▶ 立即發文'"></span>
+          </button>
+        </div>
+
+        <!-- Stat cards -->
+        <div class="grid grid-cols-3 gap-4">
+          <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+            <p class="text-xs text-gray-400 mb-1">總發文次數</p>
+            <p class="text-3xl font-bold text-white" x-text="stats.total"></p>
+          </div>
+          <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+            <p class="text-xs text-gray-400 mb-1">成功發文</p>
+            <p class="text-3xl font-bold text-green-400" x-text="stats.success"></p>
+          </div>
+          <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+            <p class="text-xs text-gray-400 mb-1">失敗次數</p>
+            <p class="text-3xl font-bold text-red-400" x-text="stats.failed"></p>
+          </div>
+        </div>
+
+        <!-- Next post info -->
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 flex items-center justify-between">
+          <div>
+            <p class="text-xs text-gray-400 mb-1">下次排程發文</p>
+            <p class="text-lg font-semibold text-white" x-text="nextRun || '尚未排程'"></p>
+          </div>
+          <div :class="schedulerRunning ? 'bg-green-900/40 text-green-400 border-green-700' : 'bg-red-900/40 text-red-400 border-red-700'"
+               class="border px-3 py-1 rounded-full text-xs font-semibold"
+               x-text="schedulerRunning ? '● 運行中' : '● 已停止'"></div>
+        </div>
+
+        <!-- Recent posts -->
+        <div x-show="recentPosts.length > 0" class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+          <div class="px-5 py-3 border-b border-gray-700">
+            <p class="text-sm font-semibold text-gray-200">最近發文記錄</p>
+          </div>
+          <div class="divide-y divide-gray-700">
+            <template x-for="post in recentPosts" :key="post.id">
+              <div class="px-5 py-3 flex items-center justify-between text-sm">
+                <div class="flex items-center gap-3">
+                  <span :class="{
+                    'bg-purple-900/40 text-purple-300': post.category === 'poetic',
+                    'bg-yellow-900/40 text-yellow-300': post.category === 'humor',
+                    'bg-blue-900/40 text-blue-300': post.category === 'inspirational',
+                    'bg-pink-900/40 text-pink-300': post.category === 'marketing',
+                  }" class="px-2 py-0.5 rounded text-xs font-medium" x-text="categoryLabel(post.category)"></span>
+                  <span class="text-gray-300" x-text="post.image_filename || '—'"></span>
+                </div>
+                <div class="flex items-center gap-3">
+                  <span class="text-gray-500 text-xs" x-text="post.created_at"></span>
+                  <span :class="post.status === 'success' ? 'text-green-400' : 'text-red-400'"
+                        x-text="post.status === 'success' ? '✅ 成功' : '❌ 失敗'"></span>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Log terminal -->
+        <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+          <div class="px-5 py-3 border-b border-gray-700 flex items-center justify-between">
+            <p class="text-sm font-semibold text-gray-200">即時日誌</p>
+            <button @click="logs = []" class="text-xs text-gray-500 hover:text-gray-300">清除</button>
+          </div>
+          <div
+            class="log-terminal bg-gray-950 text-green-400 p-4 h-72 overflow-y-auto"
+            x-ref="logBox"
+          >
+            <template x-if="logs.length === 0">
+              <p class="text-gray-600">等待日誌輸出...</p>
+            </template>
+            <template x-for="(line, i) in logs" :key="i">
+              <div x-text="line" :class="{
+                'text-red-400': line.includes('❌'),
+                'text-yellow-400': line.includes('⚠️'),
+                'text-green-400': line.includes('✅'),
+                'text-blue-300': line.includes('🤖') || line.includes('☁️'),
+                'text-gray-300': !line.includes('❌') && !line.includes('⚠️') && !line.includes('✅') && !line.includes('🤖') && !line.includes('☁️'),
+              }"></div>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════ IMAGE LIBRARY ══════════════ -->
+      <div x-show="tab === 'library'" class="p-6 space-y-5">
+        <div class="flex items-center justify-between">
+          <h1 class="text-xl font-bold text-white">圖片庫</h1>
+          <!-- Upload -->
+          <div class="flex items-center gap-3">
+            <select x-model="uploadCategory" class="w-32 !py-1.5 text-sm">
+              <option value="poetic">詩意</option>
+              <option value="humor">幽默</option>
+              <option value="inspirational">勵志</option>
+              <option value="marketing">行銷</option>
+            </select>
+            <label class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer transition-all">
+              <span>+ 上傳圖片</span>
+              <input type="file" accept=".jpg,.jpeg,.png" multiple class="hidden"
+                     @change="uploadImages($event)" />
+            </label>
+          </div>
+        </div>
+
+        <!-- Category filter -->
+        <div class="flex gap-2 flex-wrap">
+          <template x-for="cat in ['all', 'poetic', 'humor', 'inspirational', 'marketing']" :key="cat">
+            <button
+              @click="imageCategory = cat; filterImages()"
+              :class="imageCategory === cat
+                ? 'bg-indigo-600 text-white border-indigo-500'
+                : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-500 hover:text-gray-200'"
+              class="px-3 py-1.5 rounded-lg text-sm border transition-all font-medium"
+              x-text="cat === 'all' ? '全部' : categoryLabel(cat)"
+            ></button>
+          </template>
+        </div>
+
+        <!-- Loading state -->
+        <div x-show="loadingImages" class="text-center py-16 text-gray-500">
+          <p class="text-4xl mb-3">⏳</p>
+          <p>載入圖片中...</p>
+        </div>
+
+        <!-- Empty state -->
+        <div x-show="!loadingImages && filteredImages.length === 0" class="text-center py-16 text-gray-500">
+          <p class="text-4xl mb-3">🖼️</p>
+          <p>此分類沒有圖片</p>
+          <p class="text-sm mt-1">請先在設定中配置資料夾路徑，再上傳圖片</p>
+        </div>
+
+        <!-- Image grid -->
+        <div x-show="!loadingImages && filteredImages.length > 0"
+             class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <template x-for="img in filteredImages" :key="img.path">
+            <div class="img-card relative bg-gray-800 rounded-xl overflow-hidden border border-gray-700 group cursor-pointer"
+                 @click="openMetaModal(img)">
+              <!-- Thumbnail -->
+              <div class="aspect-square overflow-hidden">
+                <img :src="img.thumb_url" :alt="img.filename"
+                     class="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                     loading="lazy"
+                     @error="$event.target.src='data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'><rect fill=\'%23374151\' width=\'100\' height=\'100\'/><text x=\'50%\' y=\'50%\' text-anchor=\'middle\' dominant-baseline=\'middle\' fill=\'%236b7280\' font-size=\'24\'>🖼️</text></svg>'"
+                />
+              </div>
+              <!-- Overlay -->
+              <div class="img-overlay absolute inset-0 bg-black/60 opacity-0 flex items-center justify-center gap-2">
+                <button @click.stop="openMetaModal(img)"
+                        class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium">
+                  編輯
+                </button>
+                <button @click.stop="confirmDelete(img)"
+                        class="bg-red-700 hover:bg-red-600 text-white text-xs px-3 py-1.5 rounded-lg font-medium">
+                  刪除
+                </button>
+              </div>
+              <!-- Footer -->
+              <div class="p-2.5">
+                <p class="text-xs text-gray-300 truncate" x-text="img.filename"></p>
+                <div class="flex items-center gap-1.5 mt-1">
+                  <span :class="{
+                    'bg-purple-900/50 text-purple-300': img.category === 'poetic',
+                    'bg-yellow-900/50 text-yellow-300': img.category === 'humor',
+                    'bg-blue-900/50 text-blue-300': img.category === 'inspirational',
+                    'bg-pink-900/50 text-pink-300': img.category === 'marketing',
+                  }" class="px-1.5 py-0.5 rounded text-xs" x-text="categoryLabel(img.category)"></span>
+                  <span x-text="img.has_metadata ? '✅' : '❌'" class="text-xs" :title="img.has_metadata ? '已有 Metadata' : '缺少 Metadata'"></span>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- ══════════════ SETTINGS ══════════════ -->
+      <div x-show="tab === 'settings'" class="p-6 max-w-2xl space-y-6">
+        <h1 class="text-xl font-bold text-white">設定</h1>
+
+        <!-- Save banner -->
+        <div x-show="configSaved" x-transition
+             class="bg-green-900/40 border border-green-700 text-green-300 px-4 py-3 rounded-lg text-sm">
+          ✅ 設定已儲存
+        </div>
+
+        <form @submit.prevent="saveConfig()" class="space-y-6" x-show="config && Object.keys(config).length > 0">
+
+          <!-- Instagram -->
+          <div class="bg-gray-800 rounded-xl border border-gray-700 p-5 space-y-4">
+            <h2 class="text-sm font-bold text-gray-200 flex items-center gap-2">
+              <span class="text-lg">📱</span> Instagram
+            </h2>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1.5">Access Token</label>
+              <input type="password" x-model="config.ACCESS_TOKEN" placeholder="your_instagram_access_token" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1.5">Business Account ID</label>
+              <input type="text" x-model="config.INSTAGRAM_BUSINESS_ID" placeholder="your_instagram_business_id" />
+            </div>
+          </div>
+
+          <!-- OpenAI -->
+          <div class="bg-gray-800 rounded-xl border border-gray-700 p-5 space-y-4">
+            <h2 class="text-sm font-bold text-gray-200 flex items-center gap-2">
+              <span class="text-lg">🤖</span> OpenAI
+            </h2>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1.5">API Key</label>
+              <input type="password" x-model="config.OPENAI_API_KEY" placeholder="sk-..." />
+            </div>
+          </div>
+
+          <!-- Cloudinary -->
+          <div class="bg-gray-800 rounded-xl border border-gray-700 p-5 space-y-4">
+            <h2 class="text-sm font-bold text-gray-200 flex items-center gap-2">
+              <span class="text-lg">☁️</span> Cloudinary
+            </h2>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1.5">Cloud Name</label>
+              <input type="text" x-model="config.CLOUDINARY_CLOUD_NAME" placeholder="your_cloud_name" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1.5">API Key</label>
+              <input type="text" x-model="config.CLOUDINARY_API_KEY" placeholder="your_api_key" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1.5">API Secret</label>
+              <input type="password" x-model="config.CLOUDINARY_API_SECRET" placeholder="your_api_secret" />
+            </div>
+          </div>
+
+          <!-- Schedule -->
+          <div class="bg-gray-800 rounded-xl border border-gray-700 p-5 space-y-4">
+            <h2 class="text-sm font-bold text-gray-200 flex items-center gap-2">
+              <span class="text-lg">⏰</span> 排程設定
+            </h2>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs text-gray-400 mb-1.5">發文時間</label>
+                <input type="time" x-model="config.POST_TIME" />
+              </div>
+              <div>
+                <label class="block text-xs text-gray-400 mb-1.5">發文間隔（天）</label>
+                <input type="number" x-model.number="config.WAIT_DAYS" min="1" max="30" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Folders -->
+          <div class="bg-gray-800 rounded-xl border border-gray-700 p-5 space-y-4">
+            <h2 class="text-sm font-bold text-gray-200 flex items-center gap-2">
+              <span class="text-lg">📁</span> 資料夾路徑
+            </h2>
+            <template x-for="cat in ['poetic', 'humor', 'inspirational', 'marketing']" :key="cat">
+              <div>
+                <label class="block text-xs text-gray-400 mb-1.5" x-text="categoryLabel(cat) + ' 資料夾'"></label>
+                <input type="text" x-model="config.IMAGE_FOLDERS[cat]" :placeholder="'/path/to/' + cat" />
+              </div>
+            </template>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1.5">已發佈資料夾</label>
+              <input type="text" x-model="config.PUBLISHED_FOLDER" placeholder="/path/to/published" />
+            </div>
+          </div>
+
+          <button type="submit"
+                  class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-xl font-semibold text-sm transition-all">
+            儲存設定
+          </button>
+        </form>
+
+        <div x-show="!config || Object.keys(config).length === 0"
+             class="text-center py-10 text-gray-500">載入設定中...</div>
+      </div>
+
+      <!-- ══════════════ HISTORY ══════════════ -->
+      <div x-show="tab === 'history'" class="p-6 space-y-5">
+        <h1 class="text-xl font-bold text-white">發文記錄</h1>
+
+        <!-- Table -->
+        <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-900 text-gray-400 text-xs uppercase tracking-wider">
+              <tr>
+                <th class="px-5 py-3 text-left">時間</th>
+                <th class="px-5 py-3 text-left">分類</th>
+                <th class="px-5 py-3 text-left">圖片</th>
+                <th class="px-5 py-3 text-left">狀態</th>
+                <th class="px-5 py-3 text-left">操作</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-700">
+              <template x-if="history.length === 0">
+                <tr>
+                  <td colspan="5" class="px-5 py-10 text-center text-gray-500">尚無發文記錄</td>
+                </tr>
+              </template>
+              <template x-for="post in history" :key="post.id">
+                <tr class="hover:bg-gray-700/40 transition-colors">
+                  <td class="px-5 py-3 text-gray-400 whitespace-nowrap" x-text="post.created_at"></td>
+                  <td class="px-5 py-3">
+                    <span :class="{
+                      'bg-purple-900/40 text-purple-300': post.category === 'poetic',
+                      'bg-yellow-900/40 text-yellow-300': post.category === 'humor',
+                      'bg-blue-900/40 text-blue-300': post.category === 'inspirational',
+                      'bg-pink-900/40 text-pink-300': post.category === 'marketing',
+                    }" class="px-2 py-0.5 rounded text-xs font-medium" x-text="categoryLabel(post.category) || '—'"></span>
+                  </td>
+                  <td class="px-5 py-3 text-gray-300 max-w-[140px] truncate" x-text="post.image_filename || '—'"></td>
+                  <td class="px-5 py-3">
+                    <span :class="post.status === 'success'
+                        ? 'bg-green-900/40 text-green-400 border-green-800'
+                        : 'bg-red-900/40 text-red-400 border-red-800'"
+                          class="border px-2 py-0.5 rounded text-xs font-medium"
+                          x-text="post.status === 'success' ? '✅ 成功' : '❌ 失敗'"></span>
+                  </td>
+                  <td class="px-5 py-3">
+                    <button @click="openPostModal(post)"
+                            class="text-indigo-400 hover:text-indigo-300 text-xs font-medium">
+                      查看文案
+                    </button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div x-show="historyTotal > 20" class="flex items-center justify-between text-sm">
+          <p class="text-gray-500">共 <span x-text="historyTotal"></span> 筆記錄</p>
+          <div class="flex gap-2">
+            <button @click="historyPage > 1 && loadHistory(historyPage - 1)"
+                    :disabled="historyPage <= 1"
+                    class="px-3 py-1.5 bg-gray-800 rounded-lg border border-gray-700 text-gray-400 hover:text-white disabled:opacity-40 transition-all">
+              ← 上一頁
+            </button>
+            <span class="px-3 py-1.5 bg-gray-700 rounded-lg text-gray-300"
+                  x-text="'第 ' + historyPage + ' 頁'"></span>
+            <button @click="historyPage * 20 < historyTotal && loadHistory(historyPage + 1)"
+                    :disabled="historyPage * 20 >= historyTotal"
+                    class="px-3 py-1.5 bg-gray-800 rounded-lg border border-gray-700 text-gray-400 hover:text-white disabled:opacity-40 transition-all">
+              下一頁 →
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ══════════════ MODALS ══════════════ -->
+
+  <!-- Metadata Modal -->
+  <div x-show="showMetaModal" x-transition.opacity
+       class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+       @click.self="showMetaModal = false">
+    <div class="bg-gray-800 rounded-2xl border border-gray-600 w-full max-w-lg shadow-2xl" @click.stop>
+      <div class="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
+        <h2 class="font-semibold text-white">編輯 Metadata</h2>
+        <button @click="showMetaModal = false" class="text-gray-500 hover:text-white text-xl">✕</button>
+      </div>
+      <div class="p-6 space-y-4" x-show="selectedImage">
+        <!-- Preview -->
+        <img :src="selectedImage?.thumb_url" :alt="selectedImage?.filename"
+             class="w-full h-48 object-cover rounded-xl bg-gray-900" />
+        <div>
+          <p class="text-xs text-gray-500 mb-1" x-text="selectedImage?.filename"></p>
+        </div>
+        <!-- Description -->
+        <div>
+          <label class="block text-xs text-gray-400 mb-1.5">圖片描述</label>
+          <textarea x-model="editingMeta.description" rows="3"
+                    placeholder="描述這張圖片的內容..."></textarea>
+        </div>
+        <!-- Tags -->
+        <div>
+          <label class="block text-xs text-gray-400 mb-1.5">標籤（用逗號分隔）</label>
+          <input type="text" x-model="editingMeta.tags_str"
+                 placeholder="風景, 旅遊, 台灣" />
+        </div>
+        <div class="flex gap-3 pt-2">
+          <button @click="saveMetadata()"
+                  class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-xl font-semibold text-sm transition-all">
+            儲存
+          </button>
+          <button @click="showMetaModal = false"
+                  class="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 py-2.5 rounded-xl font-semibold text-sm transition-all">
+            取消
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Post Caption Modal -->
+  <div x-show="showPostModal" x-transition.opacity
+       class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+       @click.self="showPostModal = false">
+    <div class="bg-gray-800 rounded-2xl border border-gray-600 w-full max-w-lg shadow-2xl" @click.stop>
+      <div class="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
+        <h2 class="font-semibold text-white">發文詳情</h2>
+        <button @click="showPostModal = false" class="text-gray-500 hover:text-white text-xl">✕</button>
+      </div>
+      <div class="p-6 space-y-4" x-show="selectedPost">
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          <div class="bg-gray-900 rounded-lg p-3">
+            <p class="text-xs text-gray-500 mb-0.5">時間</p>
+            <p class="text-gray-200" x-text="selectedPost?.created_at"></p>
+          </div>
+          <div class="bg-gray-900 rounded-lg p-3">
+            <p class="text-xs text-gray-500 mb-0.5">分類</p>
+            <p class="text-gray-200" x-text="categoryLabel(selectedPost?.category)"></p>
+          </div>
+          <div class="bg-gray-900 rounded-lg p-3">
+            <p class="text-xs text-gray-500 mb-0.5">圖片</p>
+            <p class="text-gray-200 truncate" x-text="selectedPost?.image_filename || '—'"></p>
+          </div>
+          <div class="bg-gray-900 rounded-lg p-3">
+            <p class="text-xs text-gray-500 mb-0.5">Post ID</p>
+            <p class="text-gray-200 truncate" x-text="selectedPost?.instagram_post_id || '—'"></p>
+          </div>
+        </div>
+        <div x-show="selectedPost?.caption">
+          <p class="text-xs text-gray-400 mb-2">GPT 生成文案</p>
+          <div class="bg-gray-900 rounded-xl p-4 text-sm text-gray-200 whitespace-pre-wrap leading-relaxed max-h-56 overflow-y-auto"
+               x-text="selectedPost?.caption"></div>
+        </div>
+        <div x-show="selectedPost?.error_message"
+             class="bg-red-900/30 border border-red-800 rounded-xl p-4 text-sm text-red-300">
+          <p class="font-semibold mb-1">錯誤訊息</p>
+          <p class="whitespace-pre-wrap" x-text="selectedPost?.error_message"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirm Modal -->
+  <div x-show="showDeleteModal" x-transition.opacity
+       class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+       @click.self="showDeleteModal = false">
+    <div class="bg-gray-800 rounded-2xl border border-gray-600 w-full max-w-sm shadow-2xl p-6 space-y-4" @click.stop>
+      <p class="text-white font-semibold">確認刪除</p>
+      <p class="text-sm text-gray-400">確定要刪除 <span class="text-white" x-text="imageToDelete?.filename"></span>？此操作無法復原。</p>
+      <div class="flex gap-3">
+        <button @click="deleteImage()"
+                class="flex-1 bg-red-700 hover:bg-red-600 text-white py-2.5 rounded-xl font-semibold text-sm transition-all">
+          確認刪除
+        </button>
+        <button @click="showDeleteModal = false"
+                class="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 py-2.5 rounded-xl font-semibold text-sm transition-all">
+          取消
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════ ALPINE.JS APP ══════════════ -->
+  <script>
+  function app() {
+    return {
+      tab: 'dashboard',
+      navItems: [
+        { id: 'dashboard', icon: '📊', label: 'Dashboard' },
+        { id: 'library',   icon: '🖼️',  label: '圖片庫' },
+        { id: 'settings',  icon: '⚙️',  label: '設定' },
+        { id: 'history',   icon: '📋',  label: '發文記錄' },
+      ],
+
+      // Dashboard
+      stats: { total: 0, success: 0, failed: 0 },
+      nextRun: null,
+      schedulerRunning: false,
+      logs: [],
+      recentPosts: [],
+      posting: false,
+      eventSource: null,
+
+      // Library
+      images: [],
+      filteredImages: [],
+      imageCategory: 'all',
+      loadingImages: false,
+      uploadCategory: 'poetic',
+      selectedImage: null,
+      showMetaModal: false,
+      editingMeta: { description: '', tags_str: '' },
+      showDeleteModal: false,
+      imageToDelete: null,
+
+      // Settings
+      config: {},
+      configSaved: false,
+
+      // History
+      history: [],
+      historyTotal: 0,
+      historyPage: 1,
+      selectedPost: null,
+      showPostModal: false,
+
+      async init() {
+        await this.loadDashboard();
+        this.startLogStream();
+        setInterval(() => this.loadDashboard(), 15000);
+      },
+
+      async switchTab(id) {
+        this.tab = id;
+        if (id === 'library')  { this.loadingImages = true; await this.loadImages(); }
+        if (id === 'settings') { await this.loadConfig(); }
+        if (id === 'history')  { await this.loadHistory(1); }
+      },
+
+      async loadDashboard() {
+        try {
+          const d = await fetch('/api/dashboard').then(r => r.json());
+          this.stats = { total: d.total_posts, success: d.success_posts, failed: d.failed_posts };
+          this.nextRun = d.next_run;
+          this.schedulerRunning = d.scheduler_running;
+          this.recentPosts = d.recent_posts;
+          if (d.logs && d.logs.length > 0) {
+            this.logs = d.logs;
+            this.$nextTick(() => this.scrollLogs());
+          }
+        } catch (e) { console.error('Dashboard load error', e); }
+      },
+
+      startLogStream() {
+        if (this.eventSource) this.eventSource.close();
+        this.eventSource = new EventSource('/api/logs/stream');
+        this.eventSource.onmessage = (e) => {
+          const data = JSON.parse(e.data);
+          if (data.log) {
+            this.logs.push(data.log);
+            if (this.logs.length > 300) this.logs.shift();
+            this.$nextTick(() => this.scrollLogs());
+          }
+        };
+        this.eventSource.onerror = () => {
+          setTimeout(() => this.startLogStream(), 5000);
+        };
+      },
+
+      scrollLogs() {
+        const el = this.$refs.logBox;
+        if (el) el.scrollTop = el.scrollHeight;
+      },
+
+      async triggerPostNow() {
+        if (this.posting) return;
+        this.posting = true;
+        try {
+          await fetch('/api/post-now', { method: 'POST' });
+        } finally {
+          setTimeout(() => { this.posting = false; }, 3000);
+        }
+      },
+
+      async loadImages() {
+        this.loadingImages = true;
+        try {
+          this.images = await fetch('/api/images').then(r => r.json());
+          this.filterImages();
+        } catch (e) {
+          this.images = [];
+        } finally {
+          this.loadingImages = false;
+        }
+      },
+
+      filterImages() {
+        if (this.imageCategory === 'all') {
+          this.filteredImages = this.images;
+        } else {
+          this.filteredImages = this.images.filter(i => i.category === this.imageCategory);
+        }
+      },
+
+      async uploadImages(event) {
+        const files = event.target.files;
+        if (!files.length) return;
+        for (const file of files) {
+          const fd = new FormData();
+          fd.append('file', file);
+          fd.append('category', this.uploadCategory);
+          await fetch('/api/images/upload', { method: 'POST', body: fd });
+        }
+        event.target.value = '';
+        await this.loadImages();
+      },
+
+      openMetaModal(img) {
+        this.selectedImage = img;
+        const meta = img.metadata || {};
+        this.editingMeta = {
+          description: meta.description || '',
+          tags_str: (meta.tags || []).join(', '),
+        };
+        this.showMetaModal = true;
+      },
+
+      async saveMetadata() {
+        const tags = this.editingMeta.tags_str
+          .split(',').map(t => t.trim()).filter(Boolean);
+        await fetch('/api/images/metadata', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            path: this.selectedImage.path,
+            metadata: { description: this.editingMeta.description, tags },
+          }),
+        });
+        this.showMetaModal = false;
+        await this.loadImages();
+      },
+
+      confirmDelete(img) {
+        this.imageToDelete = img;
+        this.showDeleteModal = true;
+      },
+
+      async deleteImage() {
+        await fetch('/api/images', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: this.imageToDelete.path }),
+        });
+        this.showDeleteModal = false;
+        this.imageToDelete = null;
+        await this.loadImages();
+      },
+
+      async loadConfig() {
+        this.config = await fetch('/api/config').then(r => r.json());
+        if (!this.config.IMAGE_FOLDERS) this.config.IMAGE_FOLDERS = {};
+      },
+
+      async saveConfig() {
+        await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.config),
+        });
+        this.configSaved = true;
+        setTimeout(() => { this.configSaved = false; }, 3000);
+      },
+
+      async loadHistory(page) {
+        this.historyPage = page;
+        const d = await fetch(`/api/history?page=${page}&limit=20`).then(r => r.json());
+        this.history = d.posts;
+        this.historyTotal = d.total;
+      },
+
+      openPostModal(post) {
+        this.selectedPost = post;
+        this.showPostModal = true;
+      },
+
+      categoryLabel(cat) {
+        const map = { poetic: '詩意', humor: '幽默', inspirational: '勵志', marketing: '行銷' };
+        return map[cat] || cat || '—';
+      },
+    };
+  }
+  </script>
+</body>
+</html>
