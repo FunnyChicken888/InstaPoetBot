@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Mac Mini 開機自動啟動設定 (launchd)
+
+  安裝步驟：
+  1. 修改下方 <WorkingDirectory> 為你的實際路徑
+  2. 修改 python3 路徑（用 `which python3` 或 `which uvicorn` 查詢）
+  3. 複製到 ~/Library/LaunchAgents/
+     cp com.instapoetbot.plist ~/Library/LaunchAgents/
+  4. 載入服務：
+     launchctl load ~/Library/LaunchAgents/com.instapoetbot.plist
+  5. 停止服務：
+     launchctl unload ~/Library/LaunchAgents/com.instapoetbot.plist
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.instapoetbot</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/python3</string>
+    <string>-m</string>
+    <string>uvicorn</string>
+    <string>web.main:app</string>
+    <string>--host</string>
+    <string>0.0.0.0</string>
+    <string>--port</string>
+    <string>8000</string>
+  </array>
+
+  <!-- 修改為你的 InstaPoetBot 實際資料夾路徑 -->
+  <key>WorkingDirectory</key>
+  <string>/Users/你的使用者名稱/InstaPoetBot</string>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/instapoetbot.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/tmp/instapoetbot.err</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+</dict>
+</plist>
