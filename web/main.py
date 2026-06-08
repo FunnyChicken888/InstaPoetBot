@@ -5,7 +5,7 @@ import shutil
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -94,10 +94,13 @@ async def stream_logs():
 
 
 @app.post("/api/post-now")
-async def post_now(background_tasks: BackgroundTasks):
+async def post_now(background_tasks: BackgroundTasks, data: dict = {}):
+    post_type = data.get("post_type", "feed")
+
     async def run():
-        sched.add_log("📢 手動觸發發文...")
-        await do_post(log=sched.add_log)
+        label = "動態（Story）" if post_type == "story" else "貼文（Feed）"
+        sched.add_log(f"📢 手動觸發：{label}")
+        await do_post(log=sched.add_log, post_type=post_type)
 
     background_tasks.add_task(run)
     return {"message": "發文任務已啟動"}
@@ -138,7 +141,7 @@ async def serve_image(path: str = Query(...)):
 
 
 @app.post("/api/images/upload")
-async def upload_image(file: UploadFile = File(...), category: str = "poetic"):
+async def upload_image(file: UploadFile = File(...), category: str = Form("poetic")):
     cfg = load_config()
     folder = cfg.get("IMAGE_FOLDERS", {}).get(category)
     if not folder:
@@ -202,5 +205,39 @@ async def get_history(page: int = 1, limit: int = 20):
                 for p in posts
             ],
         }
+    finally:
+        db.close()
+
+
+# ── Published ────────────────────────────────────────────────────────────────
+
+@app.get("/api/images/published")
+async def list_published_images():
+    cfg = load_config()
+    pub_folder = cfg.get("PUBLISHED_FOLDER", "")
+    if not pub_folder or not os.path.isdir(pub_folder):
+        return []
+
+    db = SessionLocal()
+    try:
+        posts = db.query(PostHistory).filter(PostHistory.status == "success").all()
+        post_map = {p.image_filename: p for p in posts}
+
+        results = []
+        for fname in sorted(os.listdir(pub_folder), reverse=True):
+            if Path(fname).suffix.lower() not in ALLOWED_EXTS:
+                continue
+            fp = os.path.join(pub_folder, fname)
+            post = post_map.get(fname)
+            results.append({
+                "path":               fp,
+                "filename":           fname,
+                "thumb_url":          f"/api/images/file?path={fp}",
+                "caption":            post.caption if post else None,
+                "posted_at":          post.created_at.strftime("%Y-%m-%d %H:%M") if post else None,
+                "category":           post.category if post else None,
+                "instagram_post_id":  post.instagram_post_id if post else None,
+            })
+        return results
     finally:
         db.close()
