@@ -57,7 +57,7 @@ def get_random_image(cfg: dict) -> tuple[str | None, str | None]:
     return os.path.join(folder, random.choice(imgs)), category
 
 
-async def do_post(log=None):
+async def do_post(log=None, post_type: str = "feed"):
     def emit(msg: str):
         ts = datetime.now().strftime("%H:%M:%S")
         print(f"[{ts}] {msg}")
@@ -95,31 +95,45 @@ async def do_post(log=None):
         record.image_url = image_url
         emit("✅ Cloudinary 上傳完成")
 
-        emit("🤖 GPT-4o 生成文案中...")
-        prompt = CATEGORY_PROMPTS.get(category, "請為這張圖片生成 Instagram 貼文。")
-        if metadata:
-            prompt += f"\n\n圖片描述：{metadata.get('description', '')}\n圖片標籤：{metadata.get('tags', [])}"
+        is_story = (post_type == "story")
 
-        client = openai.OpenAI(api_key=cfg["OPENAI_API_KEY"])
-        ai_resp = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "你是 Instagram 貼文寫手，中英文對照（繁體中文在前，英文在後）。請不要回應辨識到人臉。"},
-                {"role": "user", "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": image_url}},
-                ]},
-            ],
-            max_tokens=300,
-        )
-        caption = ai_resp.choices[0].message.content.strip()
-        record.caption = caption
-        emit("📝 文案生成完成")
+        if not is_story:
+            emit("🤖 GPT-4o 生成文案中...")
+            prompt = CATEGORY_PROMPTS.get(category, "請為這張圖片生成 Instagram 貼文。")
+            if metadata:
+                prompt += f"\n\n圖片描述：{metadata.get('description', '')}\n圖片標籤：{metadata.get('tags', [])}"
 
-        emit("📱 發佈至 Instagram...")
+            client = openai.OpenAI(api_key=cfg["OPENAI_API_KEY"])
+            ai_resp = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "你是 Instagram 貼文寫手，中英文對照（繁體中文在前，英文在後）。請不要回應辨識到人臉。"},
+                    {"role": "user", "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": image_url}},
+                    ]},
+                ],
+                max_tokens=300,
+            )
+            caption = ai_resp.choices[0].message.content.strip()
+            record.caption = caption
+            emit("📝 文案生成完成")
+        else:
+            caption = ""
+            emit("📖 動態模式，跳過文案生成")
+
+        type_label = "動態（Story）" if is_story else "貼文（Feed）"
+        emit(f"📱 發佈至 Instagram {type_label}...")
+
+        media_data = {"image_url": image_url, "access_token": cfg["ACCESS_TOKEN"]}
+        if is_story:
+            media_data["media_type"] = "STORIES"
+        else:
+            media_data["caption"] = caption
+
         media_r = requests.post(
             f"https://graph.facebook.com/v18.0/{cfg['INSTAGRAM_BUSINESS_ID']}/media",
-            data={"image_url": image_url, "caption": caption, "access_token": cfg["ACCESS_TOKEN"]},
+            data=media_data,
         ).json()
 
         if "id" not in media_r:
