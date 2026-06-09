@@ -12,11 +12,13 @@ from PIL import Image
 import piexif
 
 def get_root_dir():
-    return os.path.abspath(os.sep)
+    """Return the absolute path to the project root directory."""
+    return os.path.dirname(os.path.abspath(__file__))
 
 def load_config():
     try:
-        with open(get_root_dir()+"root/config.json", "r", encoding="utf-8") as f:
+        config_path = os.path.join(get_root_dir(), "config.json")
+        with open(config_path, "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
         print("❌ Error: config.json not found!")
@@ -29,8 +31,14 @@ config = load_config()
 
 ACCESS_TOKEN = config["ACCESS_TOKEN"]
 INSTAGRAM_BUSINESS_ID = config["INSTAGRAM_BUSINESS_ID"]
-LOG_FILE = get_root_dir()+config["LOG_FILE"]
-PUBLISHED_FOLDER = get_root_dir()+config["PUBLISHED_FOLDER"]
+LOG_FILE = config["LOG_FILE"]
+if not os.path.isabs(LOG_FILE):
+    LOG_FILE = os.path.join(get_root_dir(), LOG_FILE)
+
+PUBLISHED_FOLDER = config["PUBLISHED_FOLDER"]
+if not os.path.isabs(PUBLISHED_FOLDER):
+    PUBLISHED_FOLDER = os.path.join(get_root_dir(), PUBLISHED_FOLDER)
+
 IMAGE_FOLDERS = config["IMAGE_FOLDERS"]
 
 cloudinary.config(
@@ -45,7 +53,11 @@ def get_random_image():
     available_folders = {}
 
     for category, relative_path in IMAGE_FOLDERS.items():
-        folder_path = os.path.normpath(get_root_dir() + relative_path)
+        if os.path.isabs(relative_path):
+            folder_path = os.path.normpath(relative_path)
+        else:
+            folder_path = os.path.normpath(os.path.join(get_root_dir(), relative_path))
+
         images = [f for f in os.listdir(folder_path) if f.lower().endswith((".jpg", ".jpeg", ".png"))]
         if images:
             available_folders[category] = (folder_path, images)
@@ -148,7 +160,8 @@ def wait_next_post(wait_days, post_time):
 
             log_message("📢 POST_NOW is YES, returning immediately.")
             config["POST_NOW"] = "NO"
-            with open(get_root_dir() + "root/config.json", "w", encoding="utf-8") as f:
+            config_path = os.path.join(get_root_dir(), "config.json")
+            with open(config_path, "w", encoding="utf-8") as f:
                 json.dump(config, f, ensure_ascii=False, indent=4)
             return
 
